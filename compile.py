@@ -6,40 +6,8 @@ import ntpath
 import sys
 import os
 import shutil
+from helpers import compile_helper
 from subprocess import call
-
-
-def query_yes_no(question, default="yes"):
-    """Ask a yes/no question via raw_input() and return their answer.
-
-    "question" is a string that is presented to the user.
-    "default" is the presumed answer if the user just hits <Enter>.
-        It must be "yes" (the default), "no" or None (meaning
-        an answer is required of the user).
-
-    The "answer" return value is True for "yes" or False for "no".
-    """
-    valid = {"yes": True, "y": True, "ye": True,
-             "no": False, "n": False}
-    if default is None:
-        prompt = " [y/n] "
-    elif default == "yes":
-        prompt = " [Y/n] "
-    elif default == "no":
-        prompt = " [y/N] "
-    else:
-        raise ValueError("invalid default answer: '%s'" % default)
-
-    while True:
-        sys.stdout.write(question + prompt)
-        choice = raw_input().lower()
-        if default is not None and choice == '':
-            return valid[default]
-        elif choice in valid:
-            return valid[choice]
-        else:
-            sys.stdout.write("Please respond with 'yes' or 'no' "
-                             "(or 'y' or 'n').\n")
 
 # Add this to your path
 protoc_path = "protoc"
@@ -57,29 +25,41 @@ default_out_path = out_path == "out"
 
 # Determine where to store
 proj_root = os.path.abspath("../")
-proto_path = os.path.abspath("pogo/")
+proto_path = os.path.abspath("src/")
 out_path = os.path.abspath(out_path)
+tmp_out_path = out_path
+
+# Output dir is actually different csharp because we modify it before compiling.
+if lang == "csharp":
+    tmp_out_path = os.path.join(tmp_out_path, "POGOProtos")
 
 if not default_out_path:
-    print 'Can we remove "%s"?' % out_path
-    may_remove = query_yes_no("Please answer.", default="no")
+    print 'Can we remove "%s"?' % tmp_out_path
+    may_remove = compile_helper.query_yes_no("Please answer.", default="no")
 else:
     may_remove = True
 
-if may_remove and os.path.exists(out_path):
-    shutil.rmtree(out_path)
+if may_remove and os.path.exists(tmp_out_path):
+    shutil.rmtree(tmp_out_path)
 
 # Find protofiles and compile
 for root, dirnames, filenames in os.walk(proto_path):
-    for filename in fnmatch.filter(filenames, '*.proto'):
+    protos = fnmatch.filter(filenames, '*.proto')
+    relative_out_path = None
+    for filename in protos:
+        relative_out_path = None
+
         proto_file = os.path.join(root, filename)
         relative_file_path = proto_file.replace(proto_path, "")
+        relative_path = relative_file_path.replace(ntpath.basename(proto_file), "")
 
         if lang == "csharp":
-            relative_path = relative_file_path.replace(ntpath.basename(proto_file), "")
             destination_path = os.path.abspath(out_path + relative_path)
         else:
             destination_path = os.path.abspath(out_path)
+
+        if relative_out_path is None:
+            relative_out_path = os.path.abspath(out_path + relative_path)
 
         if not os.path.exists(destination_path):
             os.makedirs(destination_path)
@@ -95,5 +75,7 @@ for root, dirnames, filenames in os.walk(proto_path):
         )
 
         call(command, shell=True)
+
+compile_helper.finish_compile(out_path, lang)
 
 print("Done!")
